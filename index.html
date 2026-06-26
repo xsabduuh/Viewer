@@ -1,1 +1,1343 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<title>Code Editor</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+<style>
+/* ═══ RESET & BASE ═══ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;width:100%;overflow:hidden;background:#000;-webkit-tap-highlight-color:transparent}
+body{font-family:'Inter',system-ui,-apple-system,sans-serif;color:#e0e0e0;display:flex;flex-direction:column;-webkit-font-smoothing:antialiased}
+button{-webkit-tap-highlight-color:transparent;touch-action:manipulation;user-select:none}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#1e1e1e;border-radius:3px}
+
+/* ═══ HIDDEN ═══ */
+.hidden{display:none!important}
+
+/* ═══ HEADER ═══ */
+#header{
+  display:flex;align-items:center;gap:0;
+  height:48px;min-height:48px;
+  background:#000;border-bottom:1px solid #111;
+  padding:0 8px;flex-shrink:0;
+  position:relative;z-index:60;
+}
+#btn-menu{
+  width:44px;height:44px;border:none;background:transparent;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  border-radius:8px;color:#555;flex-shrink:0;
+  transition:color .15s,background .15s;
+}
+#btn-menu:active{background:#111;color:#fff}
+#logo{
+  display:flex;align-items:center;gap:6px;
+  font-size:13px;font-weight:600;color:#fff;
+  letter-spacing:-.2px;padding:0 10px;
+  flex-shrink:0;
+}
+#logo svg{flex-shrink:0}
+#project-name-wrap{
+  flex:1;display:flex;align-items:center;
+  overflow:hidden;padding:0 4px;min-width:0;
+}
+#project-name{
+  font-size:12px;color:#555;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+#project-name span{color:#999;font-weight:500}
+.header-toolbar{display:flex;align-items:center;gap:1px;flex-shrink:0}
+.sep{width:1px;height:20px;background:#181818;margin:0 4px;flex-shrink:0}
+
+/* ═══ ICON BUTTONS ═══ */
+.ibtn{
+  width:40px;height:40px;border:none;background:transparent;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  border-radius:8px;color:#555;transition:color .15s,background .15s;
+  position:relative;flex-shrink:0;-webkit-tap-highlight-color:transparent;
+  touch-action:manipulation;
+}
+.ibtn:hover,.ibtn:focus-visible{background:#111;color:#ccc}
+.ibtn:active{background:#1a1a1a;color:#fff}
+.ibtn:disabled{opacity:.3;pointer-events:none}
+.ibtn-run{
+  width:40px;height:40px;border:none;
+  background:#16213a;color:#3b82f6;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  border-radius:8px;transition:all .15s;flex-shrink:0;
+  touch-action:manipulation;
+}
+.ibtn-run:active{background:#1d3a6b;color:#fff}
+
+/* Tooltip — desktop only */
+@media(hover:hover){
+  .ibtn[data-tip]::after{
+    content:attr(data-tip);
+    position:absolute;top:calc(100% + 7px);left:50%;transform:translateX(-50%);
+    background:#1a1a1a;color:#ccc;font-size:11px;padding:4px 8px;
+    border-radius:5px;white-space:nowrap;pointer-events:none;
+    opacity:0;transition:opacity .15s;z-index:999;border:1px solid #222;
+  }
+  .ibtn[data-tip]::before{
+    content:'';position:absolute;top:calc(100% + 2px);left:50%;
+    transform:translateX(-50%);border:5px solid transparent;
+    border-bottom-color:#1a1a1a;opacity:0;transition:opacity .15s;z-index:999;
+  }
+  .ibtn[data-tip]:hover::after,.ibtn[data-tip]:hover::before{opacity:1}
+}
+
+/* ═══ LAYOUT ═══ */
+#layout{display:flex;flex:1;overflow:hidden;position:relative}
+
+/* ═══ SIDEBAR OVERLAY (mobile) ═══ */
+#sidebar-overlay{
+  display:none;position:fixed;inset:0;
+  background:rgba(0,0,0,.7);z-index:49;
+  backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);
+}
+#sidebar-overlay.visible{display:block}
+
+/* ═══ SIDEBAR ═══ */
+#sidebar{
+  width:240px;min-width:240px;max-width:240px;
+  display:flex;flex-direction:column;
+  background:#050505;border-right:1px solid #111;
+  overflow:hidden;flex-shrink:0;
+  transition:transform .25s cubic-bezier(.4,0,.2,1);
+  z-index:50;
+}
+
+/* ═══ MAIN ═══ */
+#main{display:flex;flex-direction:column;flex:1;overflow:hidden;min-width:0}
+
+/* ═══ SIDEBAR SECTIONS ═══ */
+.sb-section{display:flex;flex-direction:column;border-bottom:1px solid #0f0f0f}
+.sb-header{
+  display:flex;align-items:center;
+  padding:0 10px 0 14px;height:36px;flex-shrink:0;
+  font-size:10px;font-weight:600;letter-spacing:.9px;
+  text-transform:uppercase;color:#383838;
+}
+.sb-header-actions{display:flex;gap:2px;margin-left:auto}
+.sb-btn{
+  width:32px;height:32px;border:none;background:transparent;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  border-radius:6px;color:#383838;transition:all .12s;
+  touch-action:manipulation;
+}
+.sb-btn:active{background:#111;color:#aaa}
+@media(hover:hover){.sb-btn:hover{background:#111;color:#aaa}}
+
+/* Projects list */
+#projects-list{overflow-y:auto;flex:1;max-height:200px;padding:3px 0}
+.proj-item{
+  display:flex;align-items:center;gap:8px;
+  padding:10px 12px;cursor:pointer;font-size:12.5px;color:#666;
+  transition:background .1s,color .1s;position:relative;min-height:44px;
+}
+.proj-item:active{background:#0d0d0d;color:#ccc}
+@media(hover:hover){.proj-item:hover{background:#0a0a0a;color:#ccc}}
+.proj-item.active{background:#0d1f3c;color:#93c5fd}
+.proj-item svg{flex-shrink:0;opacity:.5}
+.proj-item-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.proj-actions{display:flex;gap:2px;flex-shrink:0}
+.pa-btn{
+  width:30px;height:30px;border:none;background:transparent;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  border-radius:5px;color:#444;touch-action:manipulation;
+}
+.pa-btn:active{background:#1a1a1a;color:#ccc}
+.pa-btn.del:active{color:#f87171}
+@media(hover:hover){
+  .proj-item .proj-actions{opacity:0;transition:opacity .1s}
+  .proj-item:hover .proj-actions{opacity:1}
+  .pa-btn:hover{background:#1a1a1a;color:#ccc}
+  .pa-btn.del:hover{color:#f87171}
+}
+
+/* Files list */
+#files-list{overflow-y:auto;flex:1;padding:3px 0}
+.file-item{
+  display:flex;align-items:center;gap:8px;
+  padding:10px 12px;cursor:pointer;font-size:12.5px;color:#555;
+  transition:background .1s,color .1s;position:relative;min-height:44px;
+}
+.file-item:active{background:#0d0d0d;color:#ccc}
+@media(hover:hover){.file-item:hover{background:#0a0a0a;color:#ccc}}
+.file-item.active{background:#111;color:#e0e0e0}
+.file-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.file-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-actions{display:flex;gap:2px;flex-shrink:0}
+.fa-btn{
+  width:30px;height:30px;border:none;background:transparent;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  border-radius:5px;color:#444;touch-action:manipulation;
+}
+.fa-btn:active{background:#1a1a1a;color:#ccc}
+.fa-btn.del:active{color:#f87171}
+@media(hover:hover){
+  .file-item .file-actions{opacity:0;transition:opacity .1s}
+  .file-item:hover .file-actions{opacity:1}
+  .fa-btn:hover{background:#1a1a1a;color:#ccc}
+  .fa-btn.del:hover{color:#f87171}
+}
+
+/* ═══ RESIZE HANDLE (desktop only) ═══ */
+#sidebar-resize{
+  width:3px;cursor:col-resize;background:transparent;flex-shrink:0;
+  transition:background .15s;
+}
+#sidebar-resize:hover,#sidebar-resize.dragging{background:#1d3a6b}
+
+/* ═══ TABS BAR ═══ */
+#tabs-bar{
+  display:flex;align-items:center;
+  background:#000;border-bottom:1px solid #111;
+  height:40px;min-height:40px;flex-shrink:0;
+  overflow-x:auto;overflow-y:hidden;
+  -webkit-overflow-scrolling:touch;
+}
+#tabs-bar::-webkit-scrollbar{height:0}
+.file-tab{
+  display:flex;align-items:center;gap:6px;
+  padding:0 12px 0 14px;height:40px;
+  cursor:pointer;border-right:1px solid #0d0d0d;
+  font-size:12px;color:#444;white-space:nowrap;
+  transition:all .1s;flex-shrink:0;
+  touch-action:manipulation;min-width:0;
+}
+.file-tab:active{background:#0a0a0a}
+.file-tab.active{
+  color:#e0e0e0;border-bottom:2px solid #3b82f6;margin-bottom:-2px;background:#000;
+}
+.tab-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.tab-name{max-width:100px;overflow:hidden;text-overflow:ellipsis}
+.tab-close{
+  width:20px;height:20px;border:none;background:transparent;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  border-radius:4px;color:#333;flex-shrink:0;touch-action:manipulation;
+}
+.tab-close:active{background:#1a1a1a;color:#aaa}
+.tabs-add-btn{
+  width:44px;height:40px;border:none;background:transparent;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  color:#333;flex-shrink:0;transition:color .1s;touch-action:manipulation;
+  border-right:1px solid #0d0d0d;
+}
+.tabs-add-btn:active{color:#aaa}
+
+/* ═══ EDITOR TOOLBAR ═══ */
+#editor-toolbar{
+  display:flex;align-items:center;gap:0;
+  background:#000;border-bottom:1px solid #0a0a0a;
+  padding:2px 4px;flex-shrink:0;height:42px;
+  overflow-x:auto;-webkit-overflow-scrolling:touch;
+}
+#editor-toolbar::-webkit-scrollbar{height:0}
+#editor-toolbar .ibtn{width:38px;height:38px}
+#editor-toolbar .sep{margin:0 3px}
+
+/* ═══ CODEMIRROR ═══ */
+#editor-wrap{
+  flex:1;overflow:hidden;position:relative;background:#000;
+  display:flex;flex-direction:column;
+}
+#editor-empty{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  flex:1;gap:12px;color:#252525;font-size:13px;pointer-events:none;
+}
+.CodeMirror{
+  height:100%!important;
+  font-family:'JetBrains Mono','Fira Code','Cascadia Code','Consolas',monospace!important;
+  font-size:13px!important;line-height:1.65!important;
+  background:#000!important;color:#cdd6f4!important;
+}
+.CodeMirror-scroll{background:#000!important}
+.CodeMirror-gutters{background:#000!important;border-right:1px solid #0d0d0d!important}
+.CodeMirror-linenumber{color:#252525!important;font-size:11px;padding:0 6px 0 3px!important}
+.CodeMirror-cursor{border-left:2px solid #3b82f6!important}
+.CodeMirror-selected{background:#1d3a6b!important}
+.CodeMirror-focused .CodeMirror-selected{background:#1d3a6b!important}
+.CodeMirror-activeline-background{background:#070707!important}
+.CodeMirror-matchingbracket{color:#93c5fd!important;background:#1a3050!important;outline:none!important}
+/* Syntax */
+.cm-keyword{color:#89b4fa}.cm-def{color:#89dceb}.cm-variable{color:#cdd6f4}
+.cm-property{color:#89b4fa}.cm-operator{color:#89dceb}.cm-number{color:#fab387}
+.cm-string{color:#a6e3a1}.cm-string-2{color:#a6e3a1}
+.cm-comment{color:#2e3147;font-style:italic}
+.cm-tag{color:#f38ba8}.cm-attribute{color:#fab387}.cm-atom{color:#fab387}
+.cm-meta{color:#f5c2e7}.cm-qualifier{color:#a6e3a1}.cm-builtin{color:#89b4fa}
+.cm-type{color:#f5c2e7}.cm-string.cm-property{color:#89b4fa}
+.cm-variable-2{color:#fab387}.cm-variable-3{color:#f5c2e7}
+
+/* ═══ STATUS BAR ═══ */
+#status-bar{
+  display:flex;align-items:center;gap:8px;
+  height:22px;min-height:22px;flex-shrink:0;
+  background:#000;border-top:1px solid #0a0a0a;
+  padding:0 10px;font-size:10.5px;color:#2a2a2a;
+  overflow:hidden;
+}
+#status-bar .sb-sep{color:#181818}
+#sb-lang{color:#2a6db5;font-weight:600}
+#sb-size{margin-left:auto;color:#1e1e1e}
+
+/* ═══ MODALS ═══ */
+.modal-backdrop{
+  position:fixed;inset:0;background:rgba(0,0,0,.88);
+  display:flex;align-items:center;justify-content:center;
+  z-index:200;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+  padding:16px;
+}
+.modal-backdrop.hidden{display:none}
+.modal{
+  background:#080808;border:1px solid #181818;
+  border-radius:14px;padding:22px;width:100%;max-width:420px;
+  box-shadow:0 32px 80px rgba(0,0,0,.95);
+}
+.modal h3{font-size:14px;font-weight:600;color:#e0e0e0;margin-bottom:16px}
+.modal input[type=text]{
+  width:100%;background:#000;border:1px solid #1a1a1a;
+  border-radius:8px;padding:11px 12px;font-size:14px;
+  color:#e0e0e0;outline:none;transition:border-color .15s;
+  -webkit-appearance:none;
+}
+.modal input[type=text]:focus{border-color:#3b82f6}
+.modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:16px}
+.btn{
+  padding:10px 20px;border-radius:8px;border:none;
+  font-size:13px;font-weight:500;cursor:pointer;transition:all .15s;
+  touch-action:manipulation;min-height:40px;
+}
+.btn-ghost{background:#111;color:#777;border:1px solid #1c1c1c}
+.btn-ghost:active{background:#1a1a1a;color:#ccc}
+.btn-primary{background:#1d4ed8;color:#fff}
+.btn-primary:active{background:#2563eb}
+.btn-danger{background:#7f1d1d;color:#fca5a5}
+.btn-danger:active{background:#991b1b}
+
+/* Projects modal list */
+.proj-list-modal{max-height:50vh;overflow-y:auto;margin:10px 0;-webkit-overflow-scrolling:touch}
+.pml-item{
+  display:flex;align-items:center;gap:10px;padding:12px 10px;
+  cursor:pointer;border-radius:8px;font-size:13px;color:#777;
+  transition:all .1s;min-height:44px;touch-action:manipulation;
+}
+.pml-item:active{background:#111;color:#ccc}
+@media(hover:hover){.pml-item:hover{background:#111;color:#ccc}}
+.pml-item.active-proj{background:#0d1f3c;color:#93c5fd}
+.pml-item svg{flex-shrink:0;opacity:.6}
+.pml-item-name{flex:1}
+.pml-item-del{
+  width:32px;height:32px;border:none;background:transparent;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  border-radius:6px;color:#333;touch-action:manipulation;flex-shrink:0;
+}
+.pml-item-del:active{background:#1a1a1a;color:#f87171}
+@media(hover:hover){.pml-item-del:hover{background:#1a1a1a;color:#f87171}}
+.modal-empty{color:#333;font-size:12px;text-align:center;padding:24px}
+
+/* ═══ PREVIEW OVERLAY ═══ */
+#preview-overlay{
+  position:fixed;inset:0;z-index:300;
+  background:#000;display:flex;flex-direction:column;
+}
+#preview-overlay.hidden{display:none}
+#preview-topbar{
+  display:flex;align-items:center;gap:8px;
+  height:48px;background:#000;border-bottom:1px solid #111;
+  padding:0 12px;flex-shrink:0;
+}
+#preview-title{font-size:13px;color:#444;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#preview-frame{flex:1;width:100%;border:none;background:#fff}
+
+/* ═══ NOTIFICATION ═══ */
+#notif{
+  position:fixed;bottom:env(safe-area-inset-bottom, 20px);
+  bottom:calc(env(safe-area-inset-bottom, 0px) + 20px);
+  left:50%;transform:translateX(-50%);
+  background:#1a1a1a;color:#ccc;font-size:12px;
+  padding:9px 20px;border-radius:10px;z-index:500;
+  opacity:0;transition:opacity .2s;pointer-events:none;
+  border:1px solid #222;white-space:nowrap;
+  max-width:calc(100vw - 32px);text-align:center;
+}
+#notif.show{opacity:1}
+
+/* ═══ MOBILE RESPONSIVE ═══ */
+@media (max-width: 700px) {
+
+  /* Header compact */
+  #header{height:48px;padding:0 4px}
+  #logo span{display:none}
+  #logo{padding:0 4px;border-right:none;margin-right:0}
+  .sep{margin:0 2px}
+
+  /* Hide desktop-only buttons in header toolbar */
+  #btn-new-proj,#btn-save-proj,#btn-open-proj{display:none}
+  #header .sep:nth-last-of-type(1){display:none}
+
+  /* Sidebar: fixed drawer */
+  #sidebar{
+    position:fixed;top:0;left:0;bottom:0;
+    transform:translateX(-100%);
+    width:82vw!important;max-width:300px!important;min-width:0!important;
+    border-right:1px solid #181818;
+    transition:transform .28s cubic-bezier(.4,0,.2,1);
+    z-index:50;
+    /* safe area */
+    padding-top:env(safe-area-inset-top, 0px);
+    padding-bottom:env(safe-area-inset-bottom, 0px);
+  }
+  #sidebar.open{transform:translateX(0)}
+  #sidebar-resize{display:none}
+
+  /* Sidebar header bigger touch targets */
+  .sb-header{height:44px;padding:0 12px 0 16px}
+  .sb-btn{width:36px;height:36px}
+  .proj-item{min-height:48px;padding:10px 14px;font-size:13px}
+  .file-item{min-height:48px;padding:10px 14px;font-size:13px}
+  /* Always show actions on touch */
+  .proj-item .proj-actions{opacity:1!important}
+  .file-item .file-actions{opacity:1!important}
+  .pa-btn,.fa-btn{width:34px;height:34px}
+
+  /* Tabs bigger */
+  #tabs-bar{height:44px;min-height:44px}
+  .file-tab{height:44px;padding:0 10px 0 12px}
+
+  /* Editor toolbar */
+  #editor-toolbar{height:46px;padding:2px 2px}
+  #editor-toolbar .ibtn{width:42px;height:42px}
+
+  /* CodeMirror font bump for mobile readability */
+  .CodeMirror{font-size:14px!important;line-height:1.7!important}
+  .CodeMirror-linenumber{font-size:12px!important}
+
+  /* Status bar */
+  #status-bar{height:20px;font-size:10px;padding:0 8px}
+  #sb-file{display:none}
+
+  /* Modals — bottom sheet feel */
+  .modal-backdrop{align-items:flex-end;padding:0}
+  .modal{
+    border-radius:18px 18px 0 0;
+    padding:20px 20px calc(20px + env(safe-area-inset-bottom, 0px));
+    max-width:100%;border-bottom:none;
+  }
+
+  /* Notification above safe area */
+  #notif{bottom:calc(env(safe-area-inset-bottom, 0px) + 16px)}
+
+  /* Preview topbar */
+  #preview-topbar{height:52px;padding:0 10px}
+}
+
+@media (min-width: 701px) {
+  #btn-menu{display:none}
+  #sidebar-overlay{display:none!important}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══ HEADER ═══ -->
+<div id="header">
+  <!-- Mobile hamburger -->
+  <button id="btn-menu" aria-label="Menu">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+  </button>
+  <div id="logo">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+    <span>CodeEditor</span>
+  </div>
+  <div id="project-name-wrap">
+    <span id="project-name"><span id="pn-text">Untitled</span></span>
+  </div>
+  <div class="header-toolbar">
+    <button class="ibtn" id="btn-undo" data-tip="Undo" disabled>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.45"/></svg>
+    </button>
+    <button class="ibtn" id="btn-redo" data-tip="Redo" disabled>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.49-4.45"/></svg>
+    </button>
+    <div class="sep"></div>
+    <button class="ibtn" id="btn-copy" data-tip="Copy All">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+    </button>
+    <div class="sep"></div>
+    <button class="ibtn" id="btn-new-proj" data-tip="New Project">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+    </button>
+    <button class="ibtn" id="btn-save-proj" data-tip="Save Project">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+    </button>
+    <button class="ibtn" id="btn-open-proj" data-tip="Open Projects">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+    </button>
+    <div class="sep"></div>
+    <button class="ibtn-run" id="btn-run" data-tip="Run Preview">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+    </button>
+  </div>
+</div>
+
+<!-- ═══ LAYOUT ═══ -->
+<div id="layout">
+
+  <!-- Sidebar overlay (mobile) -->
+  <div id="sidebar-overlay"></div>
+
+  <!-- SIDEBAR -->
+  <div id="sidebar">
+    <!-- Sidebar header (mobile close) -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 10px 0;flex-shrink:0" class="sb-mobile-top">
+      <div style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#fff">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+        CodeEditor
+      </div>
+      <button class="ibtn" id="btn-close-sidebar" style="width:36px;height:36px;color:#444">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+
+    <!-- Projects Section -->
+    <div class="sb-section" style="flex-shrink:0">
+      <div class="sb-header">
+        Projects
+        <div class="sb-header-actions">
+          <button class="sb-btn" id="sb-new-proj">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+          <button class="sb-btn" id="sb-open-proj">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          </button>
+        </div>
+      </div>
+      <div id="projects-list"></div>
+    </div>
+
+    <!-- Files Section -->
+    <div class="sb-section" style="flex:1;overflow:hidden;display:flex;flex-direction:column">
+      <div class="sb-header">
+        Files
+        <div class="sb-header-actions">
+          <button class="sb-btn" id="sb-new-file">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+        </div>
+      </div>
+      <div id="files-list"></div>
+    </div>
+  </div>
+
+  <!-- RESIZE HANDLE (desktop) -->
+  <div id="sidebar-resize"></div>
+
+  <!-- MAIN AREA -->
+  <div id="main">
+    <!-- TABS BAR -->
+    <div id="tabs-bar">
+      <button class="tabs-add-btn" id="tabs-new-file">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+    </div>
+
+    <!-- EDITOR TOOLBAR -->
+    <div id="editor-toolbar">
+      <button class="ibtn" id="et-undo" data-tip="Undo" disabled>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.45"/></svg>
+      </button>
+      <button class="ibtn" id="et-redo" data-tip="Redo" disabled>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.49-4.45"/></svg>
+      </button>
+      <div class="sep" style="height:18px;margin:0 3px"></div>
+      <button class="ibtn" id="et-copy" data-tip="Copy All">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      </button>
+      <button class="ibtn" id="et-select-all" data-tip="Select All">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6v6H9z"/></svg>
+      </button>
+      <div class="sep" style="height:18px;margin:0 3px"></div>
+      <button class="ibtn" id="et-wrap" data-tip="Word Wrap">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><path d="M3 12h15a3 3 0 0 1 0 6h-4"/><polyline points="10 15 7 18 10 21"/></svg>
+      </button>
+      <div class="sep" style="height:18px;margin:0 3px"></div>
+      <!-- Mobile-only: project actions in toolbar -->
+      <button class="ibtn" id="et-new-proj" data-tip="New Project" style="display:none">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+      </button>
+      <button class="ibtn" id="et-save-proj" data-tip="Save Project" style="display:none">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+      </button>
+      <button class="ibtn" id="et-open-proj" data-tip="Projects" style="display:none">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      </button>
+    </div>
+
+    <!-- EDITOR -->
+    <div id="editor-wrap">
+      <div id="editor-empty" class="hidden">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
+        <p>Select a file or create a new one</p>
+      </div>
+      <textarea id="cm-area"></textarea>
+    </div>
+
+    <!-- STATUS BAR -->
+    <div id="status-bar">
+      <span id="sb-lang">—</span>
+      <span class="sb-sep"> | </span>
+      <span id="sb-cursor">Ln 1, Col 1</span>
+      <span class="sb-sep"> | </span>
+      <span id="sb-file">No file</span>
+      <span id="sb-size">0 B</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ PREVIEW OVERLAY ═══ -->
+<div id="preview-overlay" class="hidden">
+  <div id="preview-topbar">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="12" cy="12" r="4"/></svg>
+    <span id="preview-title">Preview</span>
+    <button class="ibtn" id="preview-close" style="margin-left:auto">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <iframe id="preview-frame" sandbox="allow-scripts allow-forms allow-modals allow-popups" title="Preview"></iframe>
+</div>
+
+<!-- ═══ MODALS ═══ -->
+<div id="modal-new-proj" class="modal-backdrop hidden">
+  <div class="modal">
+    <h3>New Project</h3>
+    <input type="text" id="inp-proj-name" placeholder="Project name..." maxlength="60" autocomplete="off">
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="mpn-cancel">Cancel</button>
+      <button class="btn btn-primary" id="mpn-create">Create</button>
+    </div>
+  </div>
+</div>
+
+<div id="modal-new-file" class="modal-backdrop hidden">
+  <div class="modal">
+    <h3>New File</h3>
+    <input type="text" id="inp-file-name" placeholder="e.g. index.html" maxlength="80" autocomplete="off" autocorrect="off" autocapitalize="off">
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="mfn-cancel">Cancel</button>
+      <button class="btn btn-primary" id="mfn-create">Create</button>
+    </div>
+  </div>
+</div>
+
+<div id="modal-open-proj" class="modal-backdrop hidden">
+  <div class="modal">
+    <h3>Projects</h3>
+    <div class="proj-list-modal" id="pml-list"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="mop-close">Close</button>
+    </div>
+  </div>
+</div>
+
+<div id="modal-rename" class="modal-backdrop hidden">
+  <div class="modal">
+    <h3 id="rename-title">Rename</h3>
+    <input type="text" id="inp-rename" placeholder="" maxlength="80" autocomplete="off" autocorrect="off" autocapitalize="off">
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="mr-cancel">Cancel</button>
+      <button class="btn btn-primary" id="mr-confirm">Rename</button>
+    </div>
+  </div>
+</div>
+
+<div id="modal-confirm-del" class="modal-backdrop hidden">
+  <div class="modal">
+    <h3 id="del-title">Delete</h3>
+    <p id="del-msg" style="font-size:13px;color:#555;margin-top:6px;line-height:1.6"></p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="mcd-cancel">Cancel</button>
+      <button class="btn btn-danger" id="mcd-confirm">Delete</button>
+    </div>
+  </div>
+</div>
+
+<div id="notif"></div>
+
+<!-- CodeMirror 5 from CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/htmlmixed/htmlmixed.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/markdown/markdown.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/selection/active-line.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closetag.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/display/autorefresh.min.js"></script>
+
+<script>
+/* ═══════════════════════════════════════════════
+   CODE EDITOR — SINGLE FILE APP
+   Multi-file · Multi-project · localStorage
+   CodeMirror 5 · AMOLED · Mobile-first
+═══════════════════════════════════════════════ */
+
+const STORAGE_KEY = 'ce_v1_data';
+const isMobile = () => window.innerWidth <= 700;
+
+const DEFAULT_HTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Page</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>Hello, World!</h1>
+  <p>Edit this file to get started.</p>
+  <script src="script.js"><\/script>
+</body>
+</html>`;
+const DEFAULT_CSS = `/* Styles */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: system-ui, sans-serif;
+  background: #1a1a2e;
+  color: #e0e0e0;
+  padding: 40px 24px;
+  min-height: 100vh;
+}
+
+h1 { color: #60a5fa; margin-bottom: 12px; }
+p  { color: #94a3b8; line-height: 1.6; }`;
+const DEFAULT_JS = `// JavaScript
+document.addEventListener('DOMContentLoaded', () => {
+  console.log('Page loaded!');
+});`;
+
+// ─── LANGUAGE HELPERS ───
+function detectLang(name) {
+  const ext = (name.split('.').pop() || '').toLowerCase();
+  return {html:'html',htm:'html',css:'css',js:'javascript',mjs:'javascript',
+    ts:'javascript',tsx:'javascript',jsx:'javascript',json:'json',
+    md:'markdown',markdown:'markdown'}[ext] || 'text';
+}
+function cmMode(lang) {
+  return {html:'htmlmixed',css:'css',javascript:'javascript',
+    json:{name:'javascript',json:true},markdown:'markdown'}[lang] || null;
+}
+function langColor(lang) {
+  return {html:'#e34c26',css:'#264de4',javascript:'#f0db4f',
+    json:'#89ca78',markdown:'#7f8c8d',text:'#444'}[lang] || '#444';
+}
+function nanoid() { return Math.random().toString(36).slice(2)+Date.now().toString(36); }
+function fmtSize(s) {
+  if(s<1024) return s+' B';
+  if(s<1048576) return (s/1024).toFixed(1)+' KB';
+  return (s/1048576).toFixed(1)+' MB';
+}
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ─── STORAGE ───
+function loadData() {
+  try { const r=localStorage.getItem(STORAGE_KEY); return r?JSON.parse(r):{projects:[],activeProjectId:null}; }
+  catch { return {projects:[],activeProjectId:null}; }
+}
+function saveData() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      projects: state.projects, activeProjectId: state.activeProjectId
+    }));
+  } catch { notify('Storage full'); }
+}
+
+// ─── STATE ───
+const raw = loadData();
+const state = {
+  projects: raw.projects || [],
+  activeProjectId: raw.activeProjectId || null,
+  activeFileId: null,
+  wordWrap: false,
+};
+function activeProject() { return state.projects.find(p=>p.id===state.activeProjectId)||null; }
+function activeFile() { const p=activeProject(); return p?p.files.find(f=>f.id===state.activeFileId)||null:null; }
+
+// ─── SIDEBAR DRAWER (mobile) ───
+function openSidebar() {
+  document.getElementById('sidebar').classList.add('open');
+  document.getElementById('sidebar-overlay').classList.add('visible');
+  document.body.style.overflow = 'hidden';
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('visible');
+  document.body.style.overflow = '';
+}
+function maybeCloseSidebar() { if(isMobile()) closeSidebar(); }
+
+// ─── MOBILE TOOLBAR VISIBILITY ───
+function updateMobileToolbar() {
+  const mobile = isMobile();
+  ['et-new-proj','et-save-proj','et-open-proj'].forEach(id=>{
+    document.getElementById(id).style.display = mobile ? '' : 'none';
+  });
+}
+
+// ─── CODEMIRROR ───
+let editor = null;
+let ignoreChange = false;
+
+function initEditor() {
+  editor = CodeMirror.fromTextArea(document.getElementById('cm-area'), {
+    mode: 'htmlmixed', theme: 'default',
+    lineNumbers: true, lineWrapping: false,
+    autoCloseBrackets: true, matchBrackets: true,
+    styleActiveLine: true, autoCloseTags: true,
+    tabSize: 2, indentWithTabs: false, autoRefresh: true,
+    extraKeys: {
+      'Ctrl-Z': ()=>{ editor.undo(); syncUndo(); },
+      'Ctrl-Y': ()=>{ editor.redo(); syncUndo(); },
+      'Shift-Ctrl-Z': ()=>{ editor.redo(); syncUndo(); },
+      'Cmd-Z': ()=>{ editor.undo(); syncUndo(); },
+      'Shift-Cmd-Z': ()=>{ editor.redo(); syncUndo(); },
+    }
+  });
+  let autosaveTimer = null;
+  editor.on('change', () => {
+    if(ignoreChange) return;
+    const f = activeFile(); if(!f) return;
+    f.content = editor.getValue();
+    syncUndo(); updateStatusBar();
+    if(autosaveTimer) clearTimeout(autosaveTimer);
+    autosaveTimer = setTimeout(saveData, 1500);
+  });
+  editor.on('cursorActivity', updateStatusBar);
+  editor.setSize('100%', '100%');
+  if(typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(()=>{ if(editor) editor.refresh(); })
+      .observe(document.getElementById('editor-wrap'));
+  }
+}
+
+function setEditorContent(content, lang) {
+  ignoreChange = true;
+  editor.setValue(content || '');
+  editor.setOption('mode', cmMode(lang) || null);
+  editor.clearHistory();
+  ignoreChange = false;
+  syncUndo(); updateStatusBar();
+  requestAnimationFrame(()=>{ editor.refresh(); });
+}
+
+function syncUndo() {
+  const h = editor ? editor.historySize() : {undo:0,redo:0};
+  ['btn-undo','et-undo'].forEach(id=>{ document.getElementById(id).disabled = h.undo===0; });
+  ['btn-redo','et-redo'].forEach(id=>{ document.getElementById(id).disabled = h.redo===0; });
+}
+
+// ─── RENDER ───
+function renderAll() { renderProjects(); renderFiles(); renderTabs(); renderEditorArea(); updateStatusBar(); }
+
+function renderProjects() {
+  const list = document.getElementById('projects-list');
+  if(!state.projects.length) {
+    list.innerHTML = '<div style="color:#222;font-size:11px;padding:12px 14px">No projects yet</div>';
+    return;
+  }
+  list.innerHTML = state.projects.map(p=>`
+    <div class="proj-item ${p.id===state.activeProjectId?'active':''}" data-id="${p.id}">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      <span class="proj-item-name">${esc(p.name)}</span>
+      <div class="proj-actions">
+        <button class="pa-btn" data-action="rename-proj" data-id="${p.id}">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button class="pa-btn del" data-action="del-proj" data-id="${p.id}">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M9 6V4h6v2"/></svg>
+        </button>
+      </div>
+    </div>`).join('');
+
+  list.querySelectorAll('.proj-item').forEach(el=>{
+    el.addEventListener('click', e=>{
+      if(e.target.closest('[data-action]')) return;
+      switchProject(el.dataset.id);
+    });
+  });
+  list.querySelectorAll('[data-action=rename-proj]').forEach(btn=>{
+    btn.addEventListener('click',e=>{ e.stopPropagation(); openRenameModal('project',btn.dataset.id); });
+  });
+  list.querySelectorAll('[data-action=del-proj]').forEach(btn=>{
+    btn.addEventListener('click',e=>{ e.stopPropagation(); confirmDeleteProject(btn.dataset.id); });
+  });
+}
+
+function renderFiles() {
+  const list = document.getElementById('files-list');
+  const p = activeProject();
+  if(!p) { list.innerHTML='<div style="color:#222;font-size:11px;padding:12px 14px">Select a project</div>'; return; }
+  if(!p.files.length) { list.innerHTML='<div style="color:#222;font-size:11px;padding:12px 14px">No files</div>'; return; }
+  list.innerHTML = p.files.map(f=>`
+    <div class="file-item ${f.id===state.activeFileId?'active':''}" data-id="${f.id}">
+      <span class="file-dot" style="background:${langColor(f.language)}"></span>
+      <span class="file-name">${esc(f.name)}</span>
+      <div class="file-actions">
+        <button class="fa-btn" data-action="rename-file" data-id="${f.id}">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button class="fa-btn del" data-action="del-file" data-id="${f.id}">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M9 6V4h6v2"/></svg>
+        </button>
+      </div>
+    </div>`).join('');
+
+  list.querySelectorAll('.file-item').forEach(el=>{
+    el.addEventListener('click', e=>{
+      if(e.target.closest('[data-action]')) return;
+      switchFile(el.dataset.id);
+      maybeCloseSidebar();
+    });
+  });
+  list.querySelectorAll('[data-action=rename-file]').forEach(btn=>{
+    btn.addEventListener('click',e=>{ e.stopPropagation(); openRenameModal('file',btn.dataset.id); });
+  });
+  list.querySelectorAll('[data-action=del-file]').forEach(btn=>{
+    btn.addEventListener('click',e=>{ e.stopPropagation(); confirmDeleteFile(btn.dataset.id); });
+  });
+}
+
+function renderTabs() {
+  const bar = document.getElementById('tabs-bar');
+  const addBtn = bar.querySelector('.tabs-add-btn');
+  bar.querySelectorAll('.file-tab').forEach(t=>t.remove());
+  const p = activeProject(); if(!p||!p.files.length) return;
+  const frag = document.createDocumentFragment();
+  p.files.forEach(f=>{
+    const tab = document.createElement('div');
+    tab.className = 'file-tab'+(f.id===state.activeFileId?' active':'');
+    tab.dataset.id = f.id;
+    tab.innerHTML = `
+      <span class="tab-dot" style="background:${langColor(f.language)}"></span>
+      <span class="tab-name">${esc(f.name)}</span>
+      <button class="tab-close" data-id="${f.id}">
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>`;
+    tab.addEventListener('click',e=>{ if(e.target.closest('.tab-close')) return; switchFile(f.id); });
+    tab.querySelector('.tab-close').addEventListener('click',e=>{ e.stopPropagation(); closeTab(f.id); });
+    frag.appendChild(tab);
+  });
+  bar.insertBefore(frag, addBtn);
+  // Scroll active tab into view
+  const activeTab = bar.querySelector('.file-tab.active');
+  if(activeTab) requestAnimationFrame(()=>activeTab.scrollIntoView({inline:'nearest',block:'nearest'}));
+}
+
+function renderEditorArea() {
+  const f = activeFile();
+  const empty = document.getElementById('editor-empty');
+  const cmEl = document.querySelector('.CodeMirror');
+  document.getElementById('pn-text').textContent = activeProject()?.name || 'Untitled';
+  if(!f) {
+    empty.classList.remove('hidden');
+    if(cmEl) cmEl.style.display = 'none';
+    return;
+  }
+  empty.classList.add('hidden');
+  if(cmEl) cmEl.style.display = '';
+  setEditorContent(f.content, f.language);
+}
+
+function updateStatusBar() {
+  const f = activeFile();
+  if(!f) {
+    document.getElementById('sb-lang').textContent='—';
+    document.getElementById('sb-cursor').textContent='';
+    document.getElementById('sb-file').textContent='No file';
+    document.getElementById('sb-size').textContent='';
+    return;
+  }
+  document.getElementById('sb-lang').textContent = f.language.charAt(0).toUpperCase()+f.language.slice(1);
+  document.getElementById('sb-file').textContent = f.name;
+  const content = editor?editor.getValue():f.content;
+  document.getElementById('sb-size').textContent = fmtSize(new Blob([content]).size);
+  if(editor) {
+    const c = editor.getCursor();
+    document.getElementById('sb-cursor').textContent = `Ln ${c.line+1}, Col ${c.ch+1}`;
+  }
+}
+
+// ─── PROJECT ACTIONS ───
+function switchProject(id) {
+  if(state.activeProjectId===id) { maybeCloseSidebar(); return; }
+  saveCurrentContent(); saveData();
+  state.activeProjectId = id;
+  const p = activeProject();
+  state.activeFileId = p&&p.files.length ? p.files[0].id : null;
+  saveData(); renderAll(); maybeCloseSidebar();
+}
+
+function createProject(name) {
+  const id=nanoid(), htmlId=nanoid(), cssId=nanoid(), jsId=nanoid();
+  state.projects.push({
+    id, name: name||'Untitled Project', createdAt: Date.now(),
+    files:[
+      {id:htmlId,name:'index.html',language:'html',content:DEFAULT_HTML},
+      {id:cssId, name:'style.css', language:'css', content:DEFAULT_CSS},
+      {id:jsId,  name:'script.js', language:'javascript',content:DEFAULT_JS},
+    ]
+  });
+  state.activeProjectId=id; state.activeFileId=htmlId;
+  saveData(); renderAll(); notify('Project created');
+}
+
+function deleteProjectById(id) {
+  state.projects = state.projects.filter(p=>p.id!==id);
+  if(state.activeProjectId===id) {
+    state.activeProjectId = state.projects[0]?.id||null;
+    const p=activeProject();
+    state.activeFileId = p?.files[0]?.id||null;
+  }
+  saveData(); renderAll(); notify('Project deleted');
+}
+
+function renameProject(id, name) {
+  const p = state.projects.find(p=>p.id===id);
+  if(p&&name.trim()){ p.name=name.trim(); saveData(); renderAll(); }
+}
+
+// ─── FILE ACTIONS ───
+function switchFile(id) {
+  if(state.activeFileId===id) return;
+  saveCurrentContent();
+  state.activeFileId=id;
+  renderTabs(); renderFiles(); renderEditorArea();
+}
+
+function closeTab(id) {
+  const p=activeProject(); if(!p) return;
+  if(state.activeFileId===id) {
+    const others=p.files.filter(f=>f.id!==id);
+    state.activeFileId=others[0]?.id||null;
+    renderTabs(); renderFiles(); renderEditorArea();
+  }
+}
+
+function createFile(name) {
+  const p=activeProject(); if(!p) return;
+  const id=nanoid();
+  p.files.push({id, name, language:detectLang(name), content:''});
+  state.activeFileId=id;
+  saveData(); renderAll(); notify('File created'); maybeCloseSidebar();
+}
+
+function deleteFileById(id) {
+  const p=activeProject(); if(!p) return;
+  const idx=p.files.findIndex(f=>f.id===id);
+  p.files=p.files.filter(f=>f.id!==id);
+  if(state.activeFileId===id) {
+    state.activeFileId=p.files[Math.max(0,idx-1)]?.id||null;
+  }
+  saveData(); renderAll(); notify('File deleted');
+}
+
+function renameFile(id, newName) {
+  const p=activeProject(); if(!p) return;
+  const f=p.files.find(f=>f.id===id);
+  if(f&&newName.trim()){
+    f.name=newName.trim(); f.language=detectLang(newName.trim());
+    saveData(); renderAll();
+    if(state.activeFileId===id&&editor) editor.setOption('mode',cmMode(f.language)||null);
+  }
+}
+
+function saveCurrentContent() {
+  if(editor){ const f=activeFile(); if(f) f.content=editor.getValue(); }
+}
+
+// ─── PREVIEW ───
+function buildPreviewHTML() {
+  const p=activeProject();
+  if(!p||!p.files.length) return '<h2 style="font-family:sans-serif;color:#888;padding:40px">No files</h2>';
+  const files=p.files;
+  const htmlFile=files.find(f=>f.language==='html'&&f.name.toLowerCase()==='index.html')||files.find(f=>f.language==='html');
+  const cssFiles=files.filter(f=>f.language==='css');
+  const jsFiles=files.filter(f=>f.language==='javascript'&&f!==htmlFile);
+  if(htmlFile){
+    let html=htmlFile.content;
+    if(cssFiles.length){
+      const s=cssFiles.map(f=>`<style>/*${f.name}*/\n${f.content}\n</style>`).join('\n');
+      html=html.includes('</head>')?html.replace('</head>',s+'\n</head>'):s+'\n'+html;
+    }
+    if(jsFiles.length){
+      const s=jsFiles.map(f=>`<script>/*${f.name}*/\n${f.content}\n<\/script>`).join('\n');
+      html=html.includes('</body>')?html.replace('</body>',s+'\n</body>'):html+'\n'+s;
+    }
+    return html;
+  }
+  const css=cssFiles.map(f=>f.content).join('\n');
+  const js=jsFiles.map(f=>f.content).join('\n');
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body><script>${js}<\/script></body></html>`;
+}
+
+function openPreview() {
+  saveCurrentContent();
+  const p=activeProject();
+  document.getElementById('preview-title').textContent=(p?p.name:'Preview')+' — Preview';
+  document.getElementById('preview-frame').srcdoc=buildPreviewHTML();
+  document.getElementById('preview-overlay').classList.remove('hidden');
+}
+function closePreview() {
+  document.getElementById('preview-overlay').classList.add('hidden');
+  document.getElementById('preview-frame').srcdoc='';
+}
+
+// ─── MODALS ───
+function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+let renameCtx={type:'',id:''};
+function openRenameModal(type,id) {
+  renameCtx={type,id};
+  const current=type==='project'
+    ? state.projects.find(p=>p.id===id)?.name||''
+    : activeProject()?.files.find(f=>f.id===id)?.name||'';
+  document.getElementById('rename-title').textContent=type==='project'?'Rename Project':'Rename File';
+  const inp=document.getElementById('inp-rename');
+  inp.value=current; openModal('modal-rename');
+  setTimeout(()=>{ inp.focus(); inp.select(); },80);
+}
+function confirmRename() {
+  const val=document.getElementById('inp-rename').value.trim(); if(!val) return;
+  if(renameCtx.type==='project') renameProject(renameCtx.id,val);
+  else renameFile(renameCtx.id,val);
+  closeModal('modal-rename'); notify('Renamed');
+}
+
+let deleteCtx={type:'',id:''};
+function confirmDeleteProject(id) {
+  const p=state.projects.find(pr=>pr.id===id);
+  deleteCtx={type:'project',id};
+  document.getElementById('del-title').textContent='Delete Project';
+  document.getElementById('del-msg').textContent=`Delete "${p?.name||'this project'}" and all its files? This cannot be undone.`;
+  openModal('modal-confirm-del');
+}
+function confirmDeleteFile(id) {
+  const f=activeProject()?.files.find(f=>f.id===id);
+  deleteCtx={type:'file',id};
+  document.getElementById('del-title').textContent='Delete File';
+  document.getElementById('del-msg').textContent=`Delete "${f?.name||'this file'}"? This cannot be undone.`;
+  openModal('modal-confirm-del');
+}
+function executeDelete() {
+  if(deleteCtx.type==='project') deleteProjectById(deleteCtx.id);
+  else deleteFileById(deleteCtx.id);
+  closeModal('modal-confirm-del');
+}
+
+function openProjectsModal() { renderProjectsModal(); openModal('modal-open-proj'); }
+function renderProjectsModal() {
+  const list=document.getElementById('pml-list');
+  if(!state.projects.length){ list.innerHTML='<div class="modal-empty">No saved projects</div>'; return; }
+  list.innerHTML=state.projects.map(p=>`
+    <div class="pml-item ${p.id===state.activeProjectId?'active-proj':''}" data-id="${p.id}">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      <span class="pml-item-name">${esc(p.name)}</span>
+      <span style="font-size:10px;color:#2a2a2a">${p.files.length} file${p.files.length!==1?'s':''}</span>
+      <button class="pml-item-del" data-id="${p.id}">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
+      </button>
+    </div>`).join('');
+  list.querySelectorAll('.pml-item').forEach(el=>{
+    el.addEventListener('click',e=>{ if(e.target.closest('.pml-item-del')) return; switchProject(el.dataset.id); closeModal('modal-open-proj'); });
+  });
+  list.querySelectorAll('.pml-item-del').forEach(btn=>{
+    btn.addEventListener('click',e=>{ e.stopPropagation(); closeModal('modal-open-proj'); confirmDeleteProject(btn.dataset.id); });
+  });
+}
+
+// ─── COPY ───
+function copyAll() {
+  const content=editor?editor.getValue():'';
+  if(!content){ notify('Nothing to copy'); return; }
+  if(navigator.clipboard) navigator.clipboard.writeText(content).then(()=>notify('Copied')).catch(()=>legacyCopy(content));
+  else legacyCopy(content);
+}
+function legacyCopy(text) {
+  const el=document.createElement('textarea');
+  el.value=text; el.style.cssText='position:fixed;top:-9999px;opacity:0';
+  document.body.appendChild(el); el.select(); document.execCommand('copy');
+  document.body.removeChild(el); notify('Copied');
+}
+
+// ─── NOTIFICATION ───
+let notifTimer=null;
+function notify(msg) {
+  const el=document.getElementById('notif');
+  el.textContent=msg; el.classList.add('show');
+  if(notifTimer) clearTimeout(notifTimer);
+  notifTimer=setTimeout(()=>el.classList.remove('show'),2000);
+}
+
+// ─── WORD WRAP ───
+function toggleWordWrap() {
+  state.wordWrap=!state.wordWrap;
+  if(editor) editor.setOption('lineWrapping',state.wordWrap);
+  document.getElementById('et-wrap').style.color=state.wordWrap?'#3b82f6':'';
+}
+
+// ─── RESIZE HANDLE (desktop) ───
+(function(){
+  const handle=document.getElementById('sidebar-resize');
+  const sidebar=document.getElementById('sidebar');
+  let drag=false,startX=0,startW=0;
+  handle.addEventListener('mousedown',e=>{
+    if(isMobile()) return;
+    drag=true; startX=e.clientX; startW=sidebar.offsetWidth;
+    handle.classList.add('dragging'); e.preventDefault();
+  });
+  document.addEventListener('mousemove',e=>{
+    if(!drag) return;
+    const w=Math.max(160,Math.min(400,startW+(e.clientX-startX)));
+    sidebar.style.cssText=`width:${w}px;min-width:${w}px;max-width:${w}px`;
+    if(editor) editor.refresh();
+  });
+  document.addEventListener('mouseup',()=>{ if(drag){drag=false;handle.classList.remove('dragging');} });
+})();
+
+// ─── SHOW SIDEBAR MOBILE TOP BAR ───
+function updateSidebarMobileTop() {
+  const el=document.querySelector('.sb-mobile-top');
+  if(el) el.style.display=isMobile()?'flex':'none';
+}
+
+// ─── OPEN FILE MODAL HELPERS ───
+function promptNewProject() {
+  document.getElementById('inp-proj-name').value='';
+  openModal('modal-new-proj');
+  setTimeout(()=>document.getElementById('inp-proj-name').focus(),80);
+}
+function promptNewFile() {
+  if(!activeProject()){notify('Create a project first');return;}
+  document.getElementById('inp-file-name').value='';
+  openModal('modal-new-file');
+  setTimeout(()=>document.getElementById('inp-file-name').focus(),80);
+}
+
+// ─── BIND EVENTS ───
+function bind() {
+  // Sidebar toggle
+  document.getElementById('btn-menu').addEventListener('click',openSidebar);
+  document.getElementById('btn-close-sidebar').addEventListener('click',closeSidebar);
+  document.getElementById('sidebar-overlay').addEventListener('click',closeSidebar);
+
+  // Header toolbar
+  document.getElementById('btn-undo').addEventListener('click',()=>{ editor?.undo(); syncUndo(); });
+  document.getElementById('btn-redo').addEventListener('click',()=>{ editor?.redo(); syncUndo(); });
+  document.getElementById('btn-copy').addEventListener('click',copyAll);
+  document.getElementById('btn-run').addEventListener('click',openPreview);
+  document.getElementById('btn-new-proj').addEventListener('click',promptNewProject);
+  document.getElementById('btn-save-proj').addEventListener('click',()=>{ saveCurrentContent(); saveData(); notify('Saved'); });
+  document.getElementById('btn-open-proj').addEventListener('click',openProjectsModal);
+
+  // Editor toolbar
+  document.getElementById('et-undo').addEventListener('click',()=>{ editor?.undo(); syncUndo(); });
+  document.getElementById('et-redo').addEventListener('click',()=>{ editor?.redo(); syncUndo(); });
+  document.getElementById('et-copy').addEventListener('click',copyAll);
+  document.getElementById('et-select-all').addEventListener('click',()=>{ editor?.execCommand('selectAll'); editor?.focus(); });
+  document.getElementById('et-wrap').addEventListener('click',toggleWordWrap);
+  document.getElementById('et-new-proj').addEventListener('click',promptNewProject);
+  document.getElementById('et-save-proj').addEventListener('click',()=>{ saveCurrentContent(); saveData(); notify('Saved'); });
+  document.getElementById('et-open-proj').addEventListener('click',openProjectsModal);
+
+  // Sidebar buttons
+  document.getElementById('sb-new-proj').addEventListener('click',promptNewProject);
+  document.getElementById('sb-new-file').addEventListener('click',promptNewFile);
+  document.getElementById('sb-open-proj').addEventListener('click',()=>{ openProjectsModal(); });
+
+  // Tabs add
+  document.getElementById('tabs-new-file').addEventListener('click',promptNewFile);
+
+  // Preview
+  document.getElementById('preview-close').addEventListener('click',closePreview);
+
+  // Modal — new project
+  document.getElementById('mpn-cancel').addEventListener('click',()=>closeModal('modal-new-proj'));
+  document.getElementById('mpn-create').addEventListener('click',()=>{
+    const v=document.getElementById('inp-proj-name').value.trim(); if(!v) return;
+    closeModal('modal-new-proj'); createProject(v);
+  });
+  document.getElementById('inp-proj-name').addEventListener('keydown',e=>{ if(e.key==='Enter') document.getElementById('mpn-create').click(); });
+
+  // Modal — new file
+  document.getElementById('mfn-cancel').addEventListener('click',()=>closeModal('modal-new-file'));
+  document.getElementById('mfn-create').addEventListener('click',()=>{
+    const v=document.getElementById('inp-file-name').value.trim(); if(!v) return;
+    closeModal('modal-new-file'); createFile(v);
+  });
+  document.getElementById('inp-file-name').addEventListener('keydown',e=>{ if(e.key==='Enter') document.getElementById('mfn-create').click(); });
+
+  // Modal — open projects
+  document.getElementById('mop-close').addEventListener('click',()=>closeModal('modal-open-proj'));
+
+  // Modal — rename
+  document.getElementById('mr-cancel').addEventListener('click',()=>closeModal('modal-rename'));
+  document.getElementById('mr-confirm').addEventListener('click',confirmRename);
+  document.getElementById('inp-rename').addEventListener('keydown',e=>{ if(e.key==='Enter') confirmRename(); });
+
+  // Modal — delete
+  document.getElementById('mcd-cancel').addEventListener('click',()=>closeModal('modal-confirm-del'));
+  document.getElementById('mcd-confirm').addEventListener('click',executeDelete);
+
+  // Close modal on backdrop click
+  ['modal-new-proj','modal-new-file','modal-open-proj','modal-rename','modal-confirm-del'].forEach(id=>{
+    document.getElementById(id).addEventListener('click',e=>{ if(e.target===e.currentTarget) closeModal(id); });
+  });
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown',e=>{
+    if((e.ctrlKey||e.metaKey)&&e.key==='s'){ e.preventDefault(); saveCurrentContent(); saveData(); notify('Saved'); }
+    if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){ e.preventDefault(); openPreview(); }
+    if(e.key==='Escape'){
+      closePreview();
+      ['modal-new-proj','modal-new-file','modal-open-proj','modal-rename','modal-confirm-del'].forEach(closeModal);
+      closeSidebar();
+    }
+  });
+
+  // Responsive: update toolbar visibility on resize
+  window.addEventListener('resize',()=>{ updateMobileToolbar(); updateSidebarMobileTop(); if(editor) editor.refresh(); });
+}
+
+// ─── INIT ───
+window.addEventListener('DOMContentLoaded', ()=>{
+  initEditor();
+  bind();
+  updateMobileToolbar();
+  updateSidebarMobileTop();
+
+  if(!state.projects.length) {
+    createProject('My Project');
+  } else {
+    if(!state.activeProjectId) state.activeProjectId=state.projects[0]?.id||null;
+    const p=activeProject();
+    if(p&&!state.activeFileId) state.activeFileId=p.files[0]?.id||null;
+    renderAll();
+  }
+});
+</script>
+</body>
+</html>
 
