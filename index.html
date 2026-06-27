@@ -684,6 +684,7 @@ button{-webkit-tap-highlight-color:transparent;touch-action:manipulation;user-se
 const STORAGE_KEY = 'ce_v1_data';
 const isMobile = () => window.innerWidth <= 700;
 
+// Default templates kept for when user explicitly creates a new project via "New Project" button
 const DEFAULT_HTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1313,7 +1314,7 @@ function bind() {
   window.addEventListener('resize',()=>{ updateMobileToolbar(); updateSidebarMobileTop(); if(editor) editor.refresh(); });
 }
 
-// ─── INIT ───
+// ─── INIT (MODIFIED: blank start without pre-written code) ───
 window.addEventListener('DOMContentLoaded', ()=>{
   initEditor();
   bind();
@@ -1321,7 +1322,19 @@ window.addEventListener('DOMContentLoaded', ()=>{
   updateSidebarMobileTop();
 
   if(!state.projects.length) {
-    createProject('My Project');
+    // Create a completely blank project with one empty HTML file
+    const id = nanoid();
+    const fileId = nanoid();
+    state.projects.push({
+      id, name: 'Untitled Project', createdAt: Date.now(),
+      files: [
+        { id: fileId, name: 'index.html', language: 'html', content: '' }
+      ]
+    });
+    state.activeProjectId = id;
+    state.activeFileId = fileId;
+    saveData();
+    renderAll();
   } else {
     if(!state.activeProjectId) state.activeProjectId=state.projects[0]?.id||null;
     const p=activeProject();
