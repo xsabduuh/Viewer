@@ -936,7 +936,8 @@ function renderTabs() {
         <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>`;
     tab.addEventListener('click',e=>{ if(e.target.closest('.tab-close')) return; switchFile(f.id); });
-    tab.querySelector('.tab-close').addEventListener('click',e=>{ e.stopPropagation(); closeTab(f.id); });
+    // ─── FIX: use confirmDeleteFile instead of closeTab ───
+    tab.querySelector('.tab-close').addEventListener('click',e=>{ e.stopPropagation(); confirmDeleteFile(f.id); });
     frag.appendChild(tab);
   });
   bar.insertBefore(frag, addBtn);
@@ -1026,6 +1027,7 @@ function switchFile(id) {
   renderTabs(); renderFiles(); renderEditorArea();
 }
 
+/* closeTab is no longer used for deletion; kept for reference if needed elsewhere */
 function closeTab(id) {
   const p=activeProject(); if(!p) return;
   if(state.activeFileId===id) {
@@ -1340,4 +1342,3 @@ window.addEventListener('DOMContentLoaded', ()=>{
 </script>
 </body>
 </html>
-
