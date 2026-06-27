@@ -461,17 +461,7 @@ button{-webkit-tap-highlight-color:transparent;touch-action:manipulation;user-se
     <span id="project-name"><span id="pn-text">Untitled</span></span>
   </div>
   <div class="header-toolbar">
-    <button class="ibtn" id="btn-undo" data-tip="Undo" disabled>
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.45"/></svg>
-    </button>
-    <button class="ibtn" id="btn-redo" data-tip="Redo" disabled>
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.49-4.45"/></svg>
-    </button>
-    <div class="sep"></div>
-    <button class="ibtn" id="btn-copy" data-tip="Copy All">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-    </button>
-    <div class="sep"></div>
+    <!-- Undo/Redo/Copy removed – already present in editor toolbar -->
     <button class="ibtn" id="btn-new-proj" data-tip="New Project">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
     </button>
@@ -844,8 +834,14 @@ function setEditorContent(content, lang) {
 
 function syncUndo() {
   const h = editor ? editor.historySize() : {undo:0,redo:0};
-  ['btn-undo','et-undo'].forEach(id=>{ document.getElementById(id).disabled = h.undo===0; });
-  ['btn-redo','et-redo'].forEach(id=>{ document.getElementById(id).disabled = h.redo===0; });
+  ['btn-undo','et-undo'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.disabled = h.undo===0;
+  });
+  ['btn-redo','et-redo'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.disabled = h.redo===0;
+  });
 }
 
 // ─── RENDER ───
@@ -936,12 +932,10 @@ function renderTabs() {
         <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>`;
     tab.addEventListener('click',e=>{ if(e.target.closest('.tab-close')) return; switchFile(f.id); });
-    // ─── FIX: use confirmDeleteFile instead of closeTab ───
     tab.querySelector('.tab-close').addEventListener('click',e=>{ e.stopPropagation(); confirmDeleteFile(f.id); });
     frag.appendChild(tab);
   });
   bar.insertBefore(frag, addBtn);
-  // Scroll active tab into view
   const activeTab = bar.querySelector('.file-tab.active');
   if(activeTab) requestAnimationFrame(()=>activeTab.scrollIntoView({inline:'nearest',block:'nearest'}));
 }
@@ -1027,7 +1021,6 @@ function switchFile(id) {
   renderTabs(); renderFiles(); renderEditorArea();
 }
 
-/* closeTab is no longer used for deletion; kept for reference if needed elsewhere */
 function closeTab(id) {
   const p=activeProject(); if(!p) return;
   if(state.activeFileId===id) {
@@ -1245,10 +1238,7 @@ function bind() {
   document.getElementById('btn-close-sidebar').addEventListener('click',closeSidebar);
   document.getElementById('sidebar-overlay').addEventListener('click',closeSidebar);
 
-  // Header toolbar
-  document.getElementById('btn-undo').addEventListener('click',()=>{ editor?.undo(); syncUndo(); });
-  document.getElementById('btn-redo').addEventListener('click',()=>{ editor?.redo(); syncUndo(); });
-  document.getElementById('btn-copy').addEventListener('click',copyAll);
+  // Header toolbar (only remaining: new/save/open projects & run)
   document.getElementById('btn-run').addEventListener('click',openPreview);
   document.getElementById('btn-new-proj').addEventListener('click',promptNewProject);
   document.getElementById('btn-save-proj').addEventListener('click',()=>{ saveCurrentContent(); saveData(); notify('Saved'); });
