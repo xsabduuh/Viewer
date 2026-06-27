@@ -684,7 +684,7 @@ button{-webkit-tap-highlight-color:transparent;touch-action:manipulation;user-se
 const STORAGE_KEY = 'ce_v1_data';
 const isMobile = () => window.innerWidth <= 700;
 
-// Default templates kept for when user explicitly creates a new project via "New Project" button
+// Default templates kept for possible future use (not used in blank start)
 const DEFAULT_HTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -986,16 +986,17 @@ function switchProject(id) {
 }
 
 function createProject(name) {
-  const id=nanoid(), htmlId=nanoid(), cssId=nanoid(), jsId=nanoid();
+  const id = nanoid();
+  const fileId = nanoid();
+  // Create a blank project with only one empty index.html file
   state.projects.push({
-    id, name: name||'Untitled Project', createdAt: Date.now(),
-    files:[
-      {id:htmlId,name:'index.html',language:'html',content:DEFAULT_HTML},
-      {id:cssId, name:'style.css', language:'css', content:DEFAULT_CSS},
-      {id:jsId,  name:'script.js', language:'javascript',content:DEFAULT_JS},
+    id, name: name || 'Untitled Project', createdAt: Date.now(),
+    files: [
+      { id: fileId, name: 'index.html', language: 'html', content: '' }
     ]
   });
-  state.activeProjectId=id; state.activeFileId=htmlId;
+  state.activeProjectId = id;
+  state.activeFileId = fileId;
   saveData(); renderAll(); notify('Project created');
 }
 
